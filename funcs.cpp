@@ -1,512 +1,627 @@
-#include <algorithm>
 #include <iostream>
+#include <algorithm>
 #include <string>
 #include <vector>
 
-#include "funcs_header.hpp"
+#include "funcsHeader.hpp"
 
 namespace LongArithm {
+using namespace std;
 
-// КОНСТРУКТОР КОПИРОВАНИЯ И ОПЕРАТОР ПРИСВАИВАНИЯ
+// // КОНСТРУКТОРЫ И ДЕСТРУКТОРЫ
+// // ---------------------------------------------------------------------------------------------------- //
 
-DA_BIG::DA_BIG(const DA_BIG& obj) {
+DA_BIG::DA_BIG() { // дефолтный конструктор
 
-    point_pos = obj.point_pos;
-    bin_precision = obj.bin_precision;
-    minus = obj.minus;
-    bits = obj.bits;
+    point_pos_ = 0;
+    precision_ = 100;
+    minus_ = false;
 }
 
-DA_BIG& DA_BIG::operator=(const DA_BIG& other) {
+DA_BIG::~DA_BIG(){} // деструктор
 
-    if (this != &other) {  
-        point_pos = other.point_pos;
-        bin_precision = other.bin_precision;
-        minus = other.minus;
-        bits = other.bits;  
-    }
-    return *this; 
+DA_BIG::DA_BIG(const DA_BIG& obj) { // конструктор копирования
+
+    point_pos_ = obj.point_pos_;
+    precision_ = obj.precision_;
+    minus_ = obj.minus_;
+    digits_ = obj.digits_;
 }
 
-// ДРУГИЕ КОНСТРУКТОРЫ И ДЕСТРУКТОР
+DA_BIG::DA_BIG(std::string input, const int& precision, const bool& make_binary) { // основной конструктор из строки
 
-DA_BIG::DA_BIG() {
+    precision_ = precision;
 
-    unsigned point_pos = 0;
-    unsigned bin_precision = 100;
-    bool minus = false;
-    std::vector<bool> bits;
-}
-
-DA_BIG::DA_BIG(std::string input, const unsigned prec) {
-
-    // разбираюсь с минусом
     if (input[0] == '-') {
-        minus = 1;
+        minus_ = true;
         input.erase(input.begin());
-    } else minus = 0;
+    } else minus_ = false;
 
-    bin_precision = prec;
+    point_pos_ = input.find('.');
+    if (point_pos_ == -1) point_pos_ = input.length(); 
+    else input.erase(point_pos_, 1); 
 
-    // если число целое, то привожу его к формату digits.0
-    if (input.find('.') == std::string::npos) {
-        input += '.';
-        input += '0';
-    }
-
-    delLeadTrailZero(input);
-    point_pos = input.find('.');
-
-    // если число равно нулю, то уберу минус
-    if (input.back() == '0' && input.front() == '0') minus = 0;
-
-    // перевод числа в двоичную
-    decToBin(input);
-    delLeadTrailZero(bits);
+    for (int i = 0; i < input.length(); i++) 
+        digits_.push_back(input[i] - '0');
+    
+    deleteZeroes();
+    if (isZero()) minus_ = false;
+    
+    if (make_binary) decToBin();
 }
 
-DA_BIG::~DA_BIG(){}
+// // ---------------------------------------------------------------------------------------------------- //
 
-// СЛЕДУЮЩИЕ 7 ФУНКЦИЙ — ВСПОМОГАТЕЛЬНЫЕ ДЛЯ ПЕРЕВОДА ЧИСЛА В ДВОИЧНЫЙ ВИД
-// И ОБРАТНО
+// // ПРИВАТНЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+// // ---------------------------------------------------------------------------------------------------- //
 
-void DA_BIG::decToBin(const std::string &input) {
+void DA_BIG::decToBin() { // из десятичной в двоичную систему счисления
 
-    std::string int_part = input.substr(0, point_pos);
-    std::string double_part = input.substr(point_pos + 1, input.length() - point_pos - 1);
-    point_pos = bin_precision;
+    DA_BIG int_part, double_part;
+    int_part.digits_.assign(digits_.begin(), digits_.begin() + point_pos_);
+    double_part.digits_.assign(digits_.begin() + point_pos_, digits_.end());
+    int_part.precision_ = 0;
+    double_part.precision_ = 0;
+    int_part.point_pos_ = int_part.digits_.size();
+    double_part.point_pos_ = double_part.digits_.size();
 
-    // дробная часть в двоичную
-    int dp_len = double_part.length();
-    bits.resize(bin_precision);
-    for (int i = bin_precision - 1; i >= 0; i--) {
-        double_part = intAdd(double_part, double_part);
-        if (double_part.length() > dp_len) {
-            double_part.erase(0, 1);
-            bits[i] = 1;
-        } else bits[i] = 0;
+    digits_.clear();
+    point_pos_ = 0;
+
+    // double_part.debugInfo();
+    // int_part.debugInfo();
+
+    if (!double_part.digits_.empty()) {
+        int dp_len = double_part.digits_.size();
+        digits_.resize(precision_ + 1);
+        for (int i = precision_; i >= 0 && !double_part.isZero(); i--) {
+            double_part = operatorAdd(double_part, double_part, 10);
+            if (double_part.digits_.size() > dp_len) {
+                digits_[i] = 1;
+                double_part.digits_.erase(
+                    double_part.digits_.begin(), 
+                    double_part.digits_.begin() + 1
+                );
+                double_part.point_pos_--;
+            } 
+            else digits_[i] = 0;
+        }  
+        point_pos_ = digits_.size();
     }
-
-    // целая часть в двоичную
-    if (int_part.front() == '0') bits.push_back(0);
-    while (int_part[0] != '0') {
-        std::string adding = "2";
-        int add_zeroes = 0;
-        for (auto i = 0; i < int_part.length() - 1; i++) {
-            adding += '0';
-            add_zeroes++;
+    
+    while (!int_part.isZero()) {
+        if (int_part.digits_.back() % 2 == 1) {
+            digits_.push_back(1);
+            int_part.digits_.back() -= 1;
         }
-
-        if ((int_part.back() - '0') % 2 == 0) bits.push_back(0);
-        else bits.push_back(1);
-
-        std::string next_div;
-        for (; add_zeroes >= 0; add_zeroes--) {
-            std::string subtrahend = "0";
-            char digit = '0';
-
-            while (intIsLessOrEqual(int_part, intAdd(subtrahend, adding))) {
-                subtrahend = intAdd(subtrahend, adding);
-                digit++;
-            }
-            next_div += digit;
-            int_part = intSubtract(int_part, subtrahend);
-            int_part += '0';
-        }
-        if (next_div[0] == '0' && next_div.length() > 1) next_div.erase(0, 1);
-        int_part = next_div;
+        else digits_.push_back(0);
+        int_part = operatorDivide(int_part, DA_BIG("2", 0, false), 10);
     }
+    digits_.push_back(0);
+
+    std::reverse(digits_.begin(), digits_.end());
+    point_pos_ = digits_.size() - point_pos_;
+
+    roundDouble(precision_, 2);
 }
 
-std::string DA_BIG::binToDec(const DA_BIG &num) {
+DA_BIG DA_BIG::binToDec() const { // из двоичной в десятичную систему счисления
 
-    std::string result = "0", double_denominator, two_pow = "1";
+    DA_BIG result("0", precision_, false), two_pow("1", precision_, false);
+    DA_BIG double_denominator, double_numerator("0", precision_, false);
+
     int i;
-    for (i = num.point_pos; i < num.bits.size(); i++) {
-        if (num.bits[i] == 1) result = intAdd(result, two_pow);
-        two_pow = intAdd(two_pow, two_pow);
-        if (i - num.point_pos <= num.point_pos) double_denominator = two_pow;
+    for (i = point_pos_ - 1; i >= 0; i--) {
+        if (digits_[i] == 1) 
+            result = operatorAdd(result, two_pow, 10);
+        two_pow = operatorAdd(two_pow, two_pow, 10);
+        if (point_pos_ - (i+1) < (int)digits_.size() - point_pos_ + 1) 
+            double_denominator = two_pow;
     }
 
-    if (num.minus) result = "-" + result;
-
-    if (!num.point_pos) return result;
-
-    for (i = 0; i < (int)(2 * num.point_pos - num.bits.size() + 1); i++)
-        double_denominator = intAdd(double_denominator, double_denominator);
-
-    std::string double_numerator = "0";
-    for (i = num.point_pos - 1; i >= 0; i--) {
-        if (num.bits[i] == 1) double_numerator = intAdd(double_numerator, "1");
-        double_numerator = intAdd(double_numerator, double_numerator);
+    for (i = 0; i < (int)digits_.size() - 2 * point_pos_ + 1; i++) 
+        double_denominator = operatorAdd(double_denominator, double_denominator, 10);
+    for (i = point_pos_; i < digits_.size(); i++) {
+        if (digits_[i] == 1) 
+            double_numerator = operatorAdd(double_numerator, DA_BIG("1", 0, false), 10);
+        double_numerator = operatorAdd(double_numerator, double_numerator, 10);
     }
- 
-    result += decDivide(double_numerator, double_denominator, num.bin_precision).substr(1);
+    result = operatorAdd(
+        operatorDivide(double_numerator, double_denominator, 10),
+        result, 
+        10
+    );
+
+    result.minus_ = minus_;
 
     return result;
 }
 
-std::string DA_BIG::decDivide(std::string dividend, std::string divisor, const int double_precision) {
+void DA_BIG::roundDouble(const int& leave_digits, const short& base) { // округление дробной части числа
 
-    std::string result, adding = divisor;
-    int div_digits_amount = 0;
+    precision_ = leave_digits;
 
-    for (auto i = 0; i < (int)(dividend.length() - divisor.length()); i++) {
-        adding += '0';
-        div_digits_amount++;
+    if (leave_digits >= (int)digits_.size() - point_pos_) {
+        deleteZeroes();
+        return;
     }
 
-    for (int i = 0; i < div_digits_amount + double_precision + 1; i++) {
-        std::string subtrahend = "0";
-        char digit = '0';
+    bool carry = (digits_[point_pos_ + leave_digits] >= base / 2);
+    digits_.erase(digits_.begin() + point_pos_ + leave_digits, digits_.end());  
+    for (int i = digits_.size() - 1; i >= 0 && carry != 0; --i) {
+        digits_[i]++;
+        carry = digits_[i] / base;
+        digits_[i] = digits_[i] % base;
+    }
+    if (carry) digits_.insert(digits_.begin(), 1);
 
-        while (intIsLessOrEqual(dividend, intAdd(subtrahend, adding))) {
-            subtrahend = intAdd(subtrahend, adding);
+    deleteZeroes();
+}
+
+void DA_BIG::deleteZeroes() { // удалить ведущие и конечные нули незначащие
+
+    int n = 0;
+    for (int i = 0; digits_[i] == 0 && i < point_pos_ - 1; i++) n++;
+    digits_.erase(digits_.begin(), digits_.begin() + n);
+    point_pos_ -= n;
+
+    while (digits_.size() > point_pos_ && digits_.back() == 0) 
+        digits_.pop_back();
+}
+
+bool DA_BIG::isZero() const { // является ли число нулем?
+
+    if (digits_.size() == 1 && digits_.front() == 0) 
+        return true;
+    return false;
+}
+
+// // ---------------------------------------------------------------------------------------------------- //
+
+// // ОСНОВЫНЫЕ МЕТОДЫ ДЛЯ РАССЧЕТОВ
+// // ---------------------------------------------------------------------------------------------------- //
+
+DA_BIG DA_BIG::operatorDivide(DA_BIG dividend, DA_BIG divisor, const short& base) const { // деление
+
+    // if (divisor.isZero()) return fatal error;
+    if (dividend.isZero()) return DA_BIG("0", 0, false);
+
+    int float_diff = 
+        (dividend.digits_.size() - dividend.point_pos_) -
+        (divisor.digits_.size() - divisor.point_pos_);
+    if (float_diff >= 0) 
+        divisor.digits_.insert(divisor.digits_.end(), float_diff, 0);
+    else 
+        dividend.digits_.insert(dividend.digits_.end(), -float_diff, 0); 
+    divisor.point_pos_ = divisor.digits_.size();
+    dividend.point_pos_ = dividend.digits_.size();
+    dividend.deleteZeroes(), divisor.deleteZeroes();
+
+    DA_BIG result;
+    result.precision_ = std::max(dividend.precision_, divisor.precision_);
+    result.minus_ = (dividend.minus_ != divisor.minus_);
+    dividend.minus_ = false, divisor.minus_ = false;
+
+    DA_BIG adding = divisor;
+    int give_zeroes = 0;
+    for (auto i = 0; i < (int)dividend.digits_.size() - (int)divisor.digits_.size(); i++) {
+        adding.digits_.push_back(0);
+        give_zeroes++;
+    }
+    adding.point_pos_ = adding.digits_.size();
+    for (int i = 0; i < give_zeroes + result.precision_ + 1; i++) {
+        DA_BIG subtrahend = DA_BIG("0", 0, false);
+        short digit = 0;
+        
+        DA_BIG temp_subtr = adding;
+        while (temp_subtr <= dividend) {
+            subtrahend = temp_subtr;
+            temp_subtr = operatorAdd(temp_subtr, adding, base);
             digit++;
         }
         
-        result += digit;
-        dividend = intSubtract(dividend, subtrahend);
-        dividend += '0';
-        if (dividend == "00") break;
-        if (i == div_digits_amount && double_precision) result += '.';
+        result.digits_.push_back(digit);
+        dividend = operatorSubtract(dividend, subtrahend, base);
+        dividend.digits_.push_back(0);
+        dividend.point_pos_++;
+        dividend.deleteZeroes();
+        if (i <= give_zeroes) result.point_pos_++;
     }
-
-    // if (result.back() >= '5' && double_precision) { // могут быть проблемы, если перед последним числом стоит 9
-    //     result.pop_back();
-    //     result.back() += 1;
-    // }
-    // if (result.length() > 1) result.pop_back();
-
-    delLeadTrailZero(result);
+    result.roundDouble(result.precision_, base);
 
     return result;
 }
 
-std::string DA_BIG::intAdd(
+DA_BIG DA_BIG::operatorMultiply(DA_BIG first, DA_BIG second, const short& base) const { // умножение
 
-    const std::string &num1,
-    const std::string &num2) {  // работает только для положительных чисел
+    if (first.isZero() || second.isZero()) return DA_BIG("0", 0, false);
 
-    short carry = 0;
-    int i = num2.length() - 1, j = num1.length() - 1;
-    std::string result(std::max(i, j) + 1, '0');
-    for (; j >= 0 || i >= 0; i--, j--) {
-        short n = carry;
-        if (j >= 0) n += (num1[j] - '0');
-        if (i >= 0) n += (num2[i] - '0');
-        carry = n / 10;
-        result[std::max(j, i)] = (n % 10) + '0';
-    }
+    DA_BIG result;
+    result.precision_ = std::max(first.precision_, second.precision_);
+    result.minus_ = (first.minus_ != second.minus_);
+    first.minus_ = false, second.minus_ = false;
+    result.digits_.resize(first.digits_.size() + second.digits_.size(), 0);
+    int result_double = 
+        first.digits_.size() - first.point_pos_ + 
+        second.digits_.size() - second.point_pos_;;
 
-    if (carry) result.insert(result.begin(), '1');
-
-    return result;
-}
-
-std::string DA_BIG::intSubtract(const std::string &num1, const std::string &num2) {  // работает только для положительных чисел num1 >= numm2
-
-    std::string result = num1;
-    int i = num2.length() - 1, j = num1.length() - 1;
-    for (; j >= 0; i--, j--) {
-        short n = result[j] - '0';
-        if (i >= 0) n -= (num2[i] - '0');
-        if (n < 0) {
-            result[j - 1]--;
-            n += 10;
+    for (int i = first.digits_.size() - 1; i >= 0; i--) {
+        short carry = 0;
+        for (int j = second.digits_.size() - 1; j >= 0 || carry != 0; j--) {
+            short second_digit = (j >= 0) ? second.digits_[j] : 0;
+            short number = result.digits_[i + j + 1] + first.digits_[i] * second_digit + carry;
+            result.digits_[i + j + 1] = number % base;
+            carry = number / base;
         }
-
-        result[j] = (n + '0');
     }
-    delLeadTrailZero(result);
+    result.point_pos_ = result.digits_.size() - result_double;
+    result.roundDouble(result.precision_, base);
 
     return result;
 }
 
-bool DA_BIG::intIsLessOrEqual(const std::string &num1, const std::string &num2) const {  // работает только для положительных чисел
+DA_BIG DA_BIG::operatorAdd(DA_BIG first, DA_BIG second, const short& base) const { // сложение
 
-    int i = num2.length(), j = num1.length();
-    if (j > i) return true;
-    if (j < i) return false;
-
-    for (auto k = 0; k < i; k++) {
-        if (num1[k] > num2[k]) return true;
-        if (num1[k] < num2[k]) return false;
+    if (first.minus_ != second.minus_) {
+        if (second.minus_) return first - (-second);
+        return second - (-first);
     }
 
-    return true;
-}
+    int float_diff = 
+        (first.digits_.size() - first.point_pos_) -
+        (second.digits_.size() - second.point_pos_);
+    if (float_diff >= 0) 
+        second.digits_.insert(second.digits_.end(), float_diff, 0);
+    else 
+        first.digits_.insert(first.digits_.end(), -float_diff, 0); 
 
-// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ УДАЛЕНИЯ ВЕДУЩИХ И ПОСЛЕДНИХ НУЛЕЙ
-
-void DA_BIG::delLeadTrailZero(std::vector<bool> &num) {
-
-    int n = 0;
-    for (int i = 0; num[i] == 0 && i < point_pos; i++) n++;
-    point_pos -= n;
-    num.erase(num.begin(), num.begin() + n);
-
-    while (num.size() > point_pos + 1 && num.back() == 0) num.pop_back();
-}
-
-void DA_BIG::delLeadTrailZero(std::string &num) {
-
-    int amount = 0;
-    for (int i = 0; num.length() > 1 && num[i + 1] != '.' && num[i] == '0'; i++)
-        amount++;
-
-    num.erase(0, amount);
-
-    if (num.find('.') != std::string::npos)
-        while (num[num.length() - 2] != '.' && num.back() == '0') 
-            num.pop_back();
-}
-
-// ПЕРЕГРУЗКИ ОПЕРАТОРОВ
-
-std::ostream &operator<<(std::ostream &os, const DA_BIG &num) {
-
-    DA_BIG temp = num;
-    return os << temp.binToDec(temp);
-}
-
-bool DA_BIG::operator<(const DA_BIG &other) const {
-
-    bool True = 1;
-    if (this->minus && other.minus) True = 0;
-    if (this->minus && !other.minus) return True;
-    if (!this->minus && other.minus) return !True;
-
-    if (this->bits.size() - this->point_pos <
-        other.bits.size() - other.point_pos)
-        return True;
-    if (this->bits.size() - this->point_pos >
-        other.bits.size() - other.point_pos)
-        return !True;
-
-    for (int i = this->bits.size(), j = other.bits.size(); i >= 0 || j >= 0;
+    DA_BIG result;
+    result.minus_ = first.minus_;
+    result.precision_ = std::max(first.precision_, second.precision_);
+    int result_double = first.digits_.size() - first.point_pos_;
+    result.digits_.resize(std::max(first.digits_.size(), second.digits_.size()) + 1, 0); 
+    
+    bool carry = false;
+    for (int i = first.digits_.size() - 1, j = second.digits_.size() - 1;
+         i >= 0 || j >= 0; 
          i--, j--) {
-        bool this_bit = 0, other_bit = 0;
-        if (i >= 0) this_bit = this->bits[i];
-        if (j >= 0) other_bit = other.bits[i];
-        if (this_bit != other_bit)
-            return ((this_bit ^ (!True)) < (other_bit ^ (!True)));
+        short n = carry;
+        if (i >= 0) n += first.digits_[i];
+        if (j >= 0) n += second.digits_[j];
+        carry = n / base;
+        result.digits_[std::max(i, j) + 1] = n % base;
     }
+    if (carry) result.digits_[0] = 1;
+    result.point_pos_ = result.digits_.size() - result_double;
+    result.deleteZeroes();
 
-    return !True;
+    return result;
 }
 
-bool DA_BIG::operator>(const DA_BIG &other) const { return other < (*this); }
+DA_BIG DA_BIG::operatorSubtract(DA_BIG first, DA_BIG second, const short& base) const { // вычитание
 
-bool DA_BIG::operator==(const DA_BIG &other) const {
+    if (second.minus_) return first + (-second);
+    else if (first.minus_) return -(-first + second);
+    else if (first < second) return -(second - first);
 
-    if (this->minus != other.minus) return false;
-    if (this->point_pos != other.point_pos) return false;
-    if (this->bits.size() - this->point_pos !=
-        other.bits.size() - other.point_pos)
-        return false;
+    int float_diff = 
+        (first.digits_.size() - first.point_pos_) -
+        (second.digits_.size() - second.point_pos_);
+    if (float_diff >= 0) 
+        second.digits_.insert(second.digits_.end(), float_diff, 0);
+    else 
+        first.digits_.insert(first.digits_.end(), -float_diff, 0);
+    
+    DA_BIG result;
+    result.minus_ = first.minus_;
+    result.precision_ = std::max(first.precision_, second.precision_);
+    int result_double = first.digits_.size() - first.point_pos_;
+    result.digits_.resize(std::max(first.digits_.size(), second.digits_.size()), 0); 
 
-    for (int i = this->bits.size(); i >= 0; i--)
-        if (this->bits[i] != other.bits[i]) return false;
+    bool carry = false;
+    for (int i = first.digits_.size() - 1, j = second.digits_.size() - 1;
+         i >= 0 || j >= 0; 
+         i--, j--) {
+        short n = -carry;
+        if (i >= 0) n += first.digits_[i];
+        if (j >= 0) n -= second.digits_[j];
+        if (n < 0) {
+            n += base;
+            carry = true;
+        } 
+        else carry = false;
+        result.digits_[std::max(i, j)] = n;
+    }
+    result.point_pos_ = result.digits_.size() - result_double;
+    result.deleteZeroes();
 
-    return true;
+    return result;
 }
 
-bool DA_BIG::operator!=(const DA_BIG &other) const { return !(*this == other); }
+// // ---------------------------------------------------------------------------------------------------- //
+
+// // ОПЕРАТОРЫ
+// // ---------------------------------------------------------------------------------------------------- //
+
+DA_BIG DA_BIG::operator/(const DA_BIG& other) const {
+
+    return operatorDivide(*this, other, 2);
+}
+DA_BIG& DA_BIG::operator/=(const DA_BIG& other) {
+
+    return *this = *this / other;
+}
+
+DA_BIG DA_BIG::operator*(const DA_BIG& other) const {
+
+    return operatorMultiply(*this, other, 2);
+}
+
+DA_BIG& DA_BIG::operator*=(const DA_BIG& other) {
+
+    return *this = *this * other;
+}
+
+DA_BIG DA_BIG::operator+(const DA_BIG& other) const {
+
+    return operatorAdd(*this, other, 2);
+}
+
+DA_BIG& DA_BIG::operator+=(const DA_BIG& other) {
+
+    return *this = *this + other;
+}
+
+DA_BIG DA_BIG::operator-(const DA_BIG& other) const {
+
+    return operatorSubtract(*this, other, 2);
+}
+
+DA_BIG& DA_BIG::operator-=(const DA_BIG& other) {
+
+    return *this = *this - other;
+}
 
 DA_BIG DA_BIG::operator-() const {
 
     DA_BIG n(*this);
-    n.minus = !minus;
+    n.minus_ = !minus_;
     return n;
 }
 
-DA_BIG DA_BIG::operator+(const DA_BIG &other) const {
+bool DA_BIG::operator==(const DA_BIG& other) const {
 
-    if (this->minus != other.minus) {
-        if (other.minus) return *this - (-other);
-        return other - (-(*this));
+    if (minus_ != other.minus_) return false;
+    if (point_pos_ != other.point_pos_) return false;
+    if (digits_.size() - point_pos_ != other.digits_.size() - other.point_pos_ || 
+        point_pos_ != other.point_pos_) return false;
+
+    for (int i = digits_.size(); i >= 0; i--)
+        if (digits_[i] != other.digits_[i]) return false;
+
+    return true;
+}
+
+bool DA_BIG::operator!=(const DA_BIG& other) const { 
+
+    return !(*this == other); 
+}
+
+bool DA_BIG::operator<(const DA_BIG& other) const {
+
+    bool ans = 1;
+    if (minus_ && other.minus_) ans = 0;
+
+    if (minus_ && !other.minus_) return ans;
+    if (!minus_ && other.minus_) return !ans;
+
+    if (point_pos_ < other.point_pos_) return ans;
+    if (point_pos_ > other.point_pos_) return !ans;
+
+    for (int i = 0, j = 0; i < digits_.size() || j < other.digits_.size(); i++, j++) {
+        short this_digit = 0, other_digit = 0;
+        if (i < digits_.size()) 
+            this_digit = digits_[i];
+        if (j < other.digits_.size()) 
+            other_digit = other.digits_[j];
+        if (this_digit != other_digit)
+            return ((this_digit ^ (!ans)) < (other_digit ^ (!ans)));
     }
 
-    DA_BIG result;
-    result.minus = this->minus;
-    result.bin_precision = std::max(this->bin_precision, other.bin_precision);
-    result.point_pos = result.bin_precision;
-    bool carry = 0;
+    return false;
+}
 
-    for (int i = 0; i < result.bin_precision; i++) {
-        char n = carry;
-        if (i >= result.bin_precision - this->point_pos)
-            n += this->bits[i - result.bin_precision + this->point_pos];
-        if (i >= result.bin_precision - other.point_pos)
-            n += other.bits[i - result.bin_precision + other.point_pos];
-        carry = n / 2;
-        result.bits.push_back(n % 2);
+bool DA_BIG::operator<=(const DA_BIG& other) const {
+
+    bool ans = 1;
+    if (minus_ && other.minus_) ans = 0;
+
+    if (minus_ && !other.minus_) return ans;
+    if (!minus_ && other.minus_) return !ans;
+
+    if (point_pos_ < other.point_pos_) return ans;
+    if (point_pos_ > other.point_pos_) return !ans;
+
+    for (int i = 0, j = 0; i < digits_.size() || j < other.digits_.size(); i++, j++) {
+        short this_digit = 0, other_digit = 0;
+        if (i < digits_.size()) 
+            this_digit = digits_[i];
+        if (j < other.digits_.size()) 
+            other_digit = other.digits_[j];
+        if (this_digit != other_digit)
+            return ((this_digit ^ (!ans)) < (other_digit ^ (!ans)));
     }
 
-    for (int i = this->point_pos, j = other.point_pos;
-         i < this->bits.size() || j < other.bits.size(); i++, j++) {
-        char n = carry;
-        if (i < this->bits.size()) n += this->bits[i];
-        if (j < other.bits.size()) n += other.bits[j];
-        carry = n / 2;
-        result.bits.push_back(n % 2);
+    return true;
+}
+
+bool DA_BIG::operator>(const DA_BIG& other) const { 
+
+    return other < (*this); 
+}
+
+bool DA_BIG::operator>=(const DA_BIG& other) const { 
+
+    return other <= (*this); 
+}
+
+DA_BIG& DA_BIG::operator=(const DA_BIG& other) { // оператор присваивания
+
+    if (this != &other) {  
+        point_pos_ = other.point_pos_;
+        precision_ = other.precision_;
+        minus_ = other.minus_;
+        digits_ = other.digits_;  
     }
 
-    if (carry) result.bits.push_back(1);
-    result.delLeadTrailZero(result.bits);
+    return *this; 
+}
+
+// std::ostream& operator<<(std::ostream& os, const DA_BIG& res) { // оператор вывода
+
+//     DA_BIG dec = res.binToDec();
+
+//     dec.roundDouble(50, 10);
+
+//     std::string result;
+//     if (dec.minus_) result += '-';
+//     for (int i = 0; i < dec.digits_.size(); i++) {
+//         if (i == dec.point_pos_) result += '.';
+//         result += dec.digits_[i] + '0';
+//     }
+//     return os << result;
+// }
+
+// // ---------------------------------------------------------------------------------------------------- //
+
+// // ДРУГИЕ ПОЛЬЗОВАТЕЛЬСКИЕ МЕТОДЫ
+// // ---------------------------------------------------------------------------------------------------- //
+
+void DA_BIG::setBinPrecision(const int precision) { // изменить точность числа
+
+    roundDouble(precision, 2);
+}
+
+std::string DA_BIG::toDecimalStr(const int& leave_digits, const bool& leave_in_bin) const { // перевод длинного числа в десятичную строку
+
+    DA_BIG dec = *this;
+    if (!leave_in_bin) {
+        dec = dec.binToDec();
+        dec.roundDouble(leave_digits, 10);
+    }
+    else dec.roundDouble(leave_digits, 2);
+
+    std::string result;
+    if (dec.minus_) result += '-';
+    for (int i = 0; i < dec.digits_.size(); i++) {
+        if (i == dec.point_pos_) result += '.';
+        result += dec.digits_[i] + '0';
+    }
 
     return result;
 }
 
-DA_BIG DA_BIG::operator-(const DA_BIG &other) const {
+void DA_BIG::debugInfo() const { // для дебага
 
-    if (other.minus) return *this + (-other);
-    else if (this->minus) return -(-*this + other);
-    else if (*this < other) return -(other - *this);
+    std::cout << std::endl << std::endl;
 
-    DA_BIG result;
-    result.minus = this->minus;
-    result.bin_precision = std::max(this->bin_precision, other.bin_precision);
-    result.point_pos = result.bin_precision;
-    bool carry = 0;
-
-    for (int i = 0; i < result.bin_precision; i++) {
-        char n = -carry;
-        if (i >= result.bin_precision - this->point_pos)
-            n += this->bits[i - result.bin_precision + this->point_pos];
-        if (i >= result.bin_precision - other.point_pos)
-            n -= other.bits[i - result.bin_precision + other.point_pos];
-        if (n < 0) {
-            n += 2;
-            carry = 1;
-        } else carry = 0;
-
-        result.bits.push_back(n);
-    }
-
-    for (int i = this->point_pos, j = other.point_pos;
-         i < this->bits.size() || j < other.bits.size(); i++, j++) {
-        char n = -carry;
-        if (i < this->bits.size()) n += this->bits[i];
-        if (j < other.bits.size()) n -= other.bits[j];
-        if (n < 0) {
-            n += 2;
-            carry = 1;
-        } else carry = 0;
-        result.bits.push_back(n);
-    }
-
-    if (carry) result.bits.push_back(1);
-    result.delLeadTrailZero(result.bits);
-
-    return result;
-}
-
-DA_BIG DA_BIG::operator*(const DA_BIG &other) const {
-
-    if ((this->bits.empty() || other.bits.empty()) ||
-        (this->bits.front() == 0 && this->bits.size() == 1) ||
-        (other.bits.front() == 0 && other.bits.size() == 1)) {
-        return DA_BIG("0");
-    }
-
-    DA_BIG result;
-    result.bin_precision = std::max(this->bin_precision, other.bin_precision);
-    if (this->bits.size() == 1 && this->bits[0] == 0) result.minus = 0;
-    else result.minus = (this->minus != other.minus);
-    result.point_pos = this->point_pos + other.point_pos;
-    result.bits.resize(this->bits.size() + other.bits.size(), 0);
-
-    for (int i = 0; i < this->bits.size(); i++) {
-        short carry = 0;
-        for (int j = 0; j < other.bits.size() || carry != 0; j++) {
-            short other_bit = (j < other.bits.size()) ? other.bits[j] : 0;
-            short number = result.bits[i + j] + this->bits[i] * other_bit + carry;
-            result.bits[i + j] = number % 2;
-            carry = number / 2;
-        }
-    }
-
-    result.delLeadTrailZero(result.bits);
-
-    if (result.point_pos > result.bin_precision) {
-        int erasing = result.point_pos - result.bin_precision;
-        result.bits.erase(result.bits.begin(), result.bits.begin() + erasing);
-        result.point_pos -= erasing;
-    }
-
-    return result;
-}
-
-DA_BIG DA_BIG::operator/(const DA_BIG &other) const {
-
-    DA_BIG dividend = *this, divisor = other;
-    
-    int eliminate_point = std::max(dividend.point_pos, divisor.point_pos);
-    for (int i = 0; i < eliminate_point; i++) {
-        if (dividend.point_pos == 0) dividend.bits.insert(dividend.bits.begin(), 0);
-        else dividend.point_pos--;
-        if (divisor.point_pos == 0) divisor.bits.insert(divisor.bits.begin(), 0);
-        else divisor.point_pos--;
-    }
-
-    while (divisor.bits.size() > divisor.point_pos + 1 && divisor.bits.back() == 0) divisor.bits.pop_back();
-    while (dividend.bits.size() > dividend.point_pos + 1 && dividend.bits.back() == 0) dividend.bits.pop_back();
-
-    DA_BIG result, adding = divisor;
-    result.point_pos = 0;
-    result.bin_precision = std::max(dividend.bin_precision, divisor.bin_precision);
-    if (dividend.bits.size() == 1 && dividend.bits[0] == 0) result.minus = 0;
-    else result.minus = (dividend.minus != divisor.minus);
-    dividend.minus = 0, divisor.minus = 0, adding.minus = 0;
-    
-    int div_digits_amount = 0;
-    for (auto i = 0; i < (int)(dividend.bits.size() - divisor.bits.size()); i++) {
-        adding.bits.insert(adding.bits.begin(), 0);
-        div_digits_amount++;
-    }
-
-    for (int i = 0; i < div_digits_amount + result.bin_precision + 1; i++) {
-        DA_BIG subtrahend = DA_BIG("0", 0);
-        char digit = 0;
-
-        while (subtrahend + adding < dividend || subtrahend + adding == dividend) {
-            subtrahend = subtrahend + adding;
-            digit++;
-        }
-        
-        result.bits.insert(result.bits.begin(), digit);
-        dividend = dividend - subtrahend;
-        dividend = dividend * DA_BIG("2", 0);
-        if (i > div_digits_amount && result.bin_precision) result.point_pos++;
-    }
-
-    result.delLeadTrailZero(result.bits);
-   
-    return result;
-}
-
-// ДЕБАГ ИНФО
-
-void DA_BIG::debugInfo() const {
-
-    std::cout << "\nMinus: " << (this->minus ? "yes" : "no")
-              << "\nbin_precision: " << this->bin_precision
-              << "\nPoint_pos: " << this->point_pos
-              << "\nSize in binary: " << bits.size() << "\nIn binary: ";
-
+    std::cout << "Minus: " << (minus_ ? "yes" : "no")
+              << "\nPrecision: " << precision_
+              << "\nPoint position: " << point_pos_
+              << "\nDigits: " << digits_.size();
+              
+    std::cout << "\nNumber: ";
     int i = 0;
-    for (auto it = bits.rbegin(); it != bits.rend(); ++it) {
-        if (i++ == bits.size() - point_pos) std::cout << '.';
-        std::cout << *it;
+    for (auto it = digits_.begin(); it != digits_.end(); ++it) {
+        if (i++ == point_pos_) std::cout << '.';
+        std::cout << (int)(*it);
     }
 
     std::cout << std::endl << std::endl;
 }
 
+// // ---------------------------------------------------------------------------------------------------- //
+
+// // ПИ
+// // ---------------------------------------------------------------------------------------------------- //
+
+std::string DA_BIG::getPi(const int& dec_prec, const int& bin_prec) {
+
+    DA_BIG Pi = DA_BIG::calculatePi(dec_prec, bin_prec);
+    DA_BIG dec = Pi.binToDec();
+    if (dec_prec < (int)dec.digits_.size() - dec.point_pos_) 
+        dec.digits_.erase(dec.digits_.begin() + dec.point_pos_ + dec_prec, dec.digits_.end());  
+
+    std::string result;
+    for (int i = 0; i < dec.digits_.size(); i++) {
+        if (i == dec.point_pos_) result += '.';
+        result += dec.digits_[i] + '0';
+    }
+
+    return result;
 }
 
-LongArithm::DA_BIG operator ""_longnum(long double num) {
+DA_BIG DA_BIG::calculatePi(const int& dec_prec, const int& bin_prec) { // вычисляем знаки Пи с помощью Bellard's formula
+    
+    DA_BIG pi{"0", bin_prec, false};
+
+    DA_BIG up{"1", bin_prec, false};
+    DA_BIG down = {"10000000000", bin_prec, false};
+
+    DA_BIG up0{"100000", bin_prec, false};
+    DA_BIG up1{"1", bin_prec, false};
+    DA_BIG up2{"100000000", bin_prec, false};
+    DA_BIG up3{"1000000", bin_prec, false};
+    DA_BIG up4{"100", bin_prec, false};
+    DA_BIG up5{"100", bin_prec, false};
+    DA_BIG up6{"1", bin_prec, false};
+
+    DA_BIG down0{"1", bin_prec, false};
+    DA_BIG down1{"11", bin_prec, false};
+    DA_BIG down2{"1", bin_prec, false};
+    DA_BIG down3{"11", bin_prec, false};
+    DA_BIG down4{"101", bin_prec, false};
+    DA_BIG down5{"111", bin_prec, false};
+    DA_BIG down6{"1001", bin_prec, false};
+
+    if (dec_prec == 0) return DA_BIG{"11", 0, false};
+
+
+    for (auto k = 0; k < dec_prec / 2; ++k) {
+
+        if (k % 2 == 0)
+            pi += up*(-up0 / down0 - up1 / down1 + up2 / down2 - up3 / down3 - up4 / down4 - up5 / down5 + up6 / down6);
+        else 
+            pi -= up*(-up0 / down0 - up1 / down1 + up2 / down2 - up3 / down3 - up4 / down4 - up5 / down5 + up6 / down6);
+            
+        up /= down;
+        down0 += DA_BIG{"100", bin_prec, false};
+        down1 += DA_BIG{"100", bin_prec, false};
+        down2 += DA_BIG{"1010", bin_prec, false};
+        down3 += DA_BIG{"1010", bin_prec, false};
+        down4 += DA_BIG{"1010", bin_prec, false};
+        down5 += DA_BIG{"1010", bin_prec, false};
+        down6 += DA_BIG{"1010", bin_prec, false};
+    }
+
+    pi /= DA_BIG{"1000000", bin_prec, false};
+
+    return pi;
+}
+
+}
+
+// // ---------------------------------------------------------------------------------------------------- //
+
+// // ПОЛЬЗОВАТЕЛЬСКИЕ ЛИТЕРАЛЫ
+// // ---------------------------------------------------------------------------------------------------- //
+
+LongArithm::DA_BIG operator ""_longnum(long double num) { // оператор перевода дабла в длинное число
+
+    return LongArithm::DA_BIG(std::to_string(num));
+}
+
+LongArithm::DA_BIG operator ""_longnum(unsigned long long num) {
+
     return LongArithm::DA_BIG(std::to_string(num));
 }
