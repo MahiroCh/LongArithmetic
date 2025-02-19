@@ -1,3 +1,6 @@
+#ifndef DA_BIG_HPP
+#define DA_BIG_HPP
+
 #include <string>
 #include <vector>
 
@@ -7,53 +10,64 @@ class DA_BIG {
 
 private:
 
-    unsigned point_pos;
-    unsigned bin_precision; // кол-во знаков после запятой в двоичной системе счисления
-    bool minus;
-    std::vector<bool> bits; // ТОДО: найти функцию, которая представляют bool'ы как 1 бит
+    int point_pos_; // реальная поизиция точки
+    int precision_; // точность для вычислений, конечные незначащие нули всегда обрезаются
+    bool minus_; // наличие минуса
+    std::vector<short> digits_; // сами цифры (не задом наперед)
     
-    // перевод числа в двоичный вид и обратно
-    bool intIsLessOrEqual(const std::string &num1, const std::string &num2) const;
-    std::string intAdd(const std::string &num1, const std::string &num2);
-    std::string intSubtract(const std::string &num1, const std::string &num2); 
-    void decToBin(const std::string &input);
-    std::string decDivide(std::string dividend, std::string divisor, const int double_precision);
-    
-    // удалить лишние нули
-    void delLeadTrailZero(std::vector<bool> &num); 
-    void delLeadTrailZero(std::string &num);
-    
+    // вспомогательные методы
+    void decToBin();
+    DA_BIG binToDec() const; // выдает столько же цифр после запятой 10 системе, сколько было в 2 системе
+    void deleteZeroes(); 
+    bool isZero() const;
+    void roundDouble(const int& leave_digits, const short& base);
+
+    // основные методы рассчетов (операторы просто будут ссылаться на них в двоичной системе счисления)
+    DA_BIG operatorDivide(DA_BIG, DA_BIG, const short& base) const;
+    DA_BIG operatorAdd(DA_BIG, DA_BIG, const short& base) const;
+    DA_BIG operatorSubtract(DA_BIG, DA_BIG, const short& base) const;
+    DA_BIG operatorMultiply(DA_BIG, DA_BIG, const short& base) const;
     
 public:
     
-    std::string binToDec(const DA_BIG &num); // временно public, так как иначе operator<< не работает
-    
-    // конструктор копирования
-    DA_BIG(const DA_BIG& obj);
-    
-    // другие конструкторы и деструктор
+    // конструкторы и деструкторы
     DA_BIG();
-    DA_BIG(std::string input, const unsigned precision = 100);
     ~DA_BIG();
+    DA_BIG(std::string, const int& precision = 700, const bool& make_binary = true);
+    DA_BIG(const DA_BIG&); // конструктор копирования
     
     // перегрузки операторов
-    friend std::ostream &operator<<(std::ostream &os, const DA_BIG &num) ;
-    bool operator<(const DA_BIG& other) const;
-    bool operator>(const DA_BIG& other) const;
-    bool operator==(const DA_BIG& other) const;
-    bool operator!=(const DA_BIG& other) const;
-    DA_BIG operator+(const DA_BIG& other) const;
-    DA_BIG operator-(const DA_BIG& other) const;
-    DA_BIG operator*(const DA_BIG& other) const;
-    DA_BIG operator/(const DA_BIG& other) const;
+    bool operator<(const DA_BIG&) const;
+    bool operator<=(const DA_BIG&) const;
+    bool operator>(const DA_BIG&) const;
+    bool operator>=(const DA_BIG&) const;
+    bool operator==(const DA_BIG&) const;
+    bool operator!=(const DA_BIG&) const;
+    DA_BIG operator+(const DA_BIG&) const;
+    DA_BIG& operator+=(const DA_BIG&);
+    DA_BIG operator-(const DA_BIG&) const;
+    DA_BIG& operator-=(const DA_BIG&);
+    DA_BIG operator*(const DA_BIG&) const;
+    DA_BIG& operator*=(const DA_BIG&);
+    DA_BIG operator/(const DA_BIG&) const;
+    DA_BIG& operator/=(const DA_BIG&);
     DA_BIG operator-() const;
-
-    // оператор присваивания
-    DA_BIG& operator=(const DA_BIG& other);
+    friend std::ostream& operator<<(std::ostream&, const DA_BIG&) ;
+    DA_BIG& operator=(const DA_BIG&); // оператор присваивания
     
-    // для дебага
-    void debugInfo() const;
+    // другие методы
+    void setBinPrecision(const int);
+    void debugInfo() const; // для дебага
+    std::string toDecimalStr(const int& leave_digits = 50, const bool& leave_in_bin = false) const;
+
+    // для pi
+    static DA_BIG calculatePi(const int& dec_prec, const int& bin_prec);
+    static std::string getPi(const int& dec_prec = 100, const int& bin_prec = 500);
 };
 
 }
-LongArithm::DA_BIG operator ""_longnum(long double num);
+
+LongArithm::DA_BIG operator ""_longnum(long double);
+LongArithm::DA_BIG operator ""_longnum(unsigned long long);
+
+#endif
