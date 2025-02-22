@@ -3,6 +3,9 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
+#include <algorithm>
+#include <iostream>
 
 namespace LongArithm {
 
@@ -16,11 +19,11 @@ private:
     std::vector<short> digits_; // сами цифры (не задом наперед)
     
     // вспомогательные методы
-    void decToBin();
     DA_BIG binToDec() const; // выдает столько же цифр после запятой 10 системе, сколько было в 2 системе
+    void decToBin();
     void deleteZeroes(); 
     bool isZero() const;
-    void roundDouble(const int& leave_digits, const short& base);
+    void roundDouble(const int& roud_prec, const short& base);
 
     // основные методы рассчетов (операторы просто будут ссылаться на них в двоичной системе счисления)
     DA_BIG operatorDivide(DA_BIG, DA_BIG, const short& base) const;
@@ -33,7 +36,7 @@ public:
     // конструкторы и деструкторы
     DA_BIG();
     ~DA_BIG();
-    DA_BIG(std::string, const int& precision = 700, const bool& make_binary = true);
+    DA_BIG(std::string, const int& calculation_prec = 700, const bool& make_binary = true);
     DA_BIG(const DA_BIG&); // конструктор копирования
     
     // перегрузки операторов
@@ -57,17 +60,19 @@ public:
     
     // другие методы
     void setBinPrecision(const int);
-    void debugInfo() const; // для дебага
-    std::string toDecimalStr(const int& leave_digits = 50, const bool& leave_in_bin = false) const;
+    std::string toDecimalStr(const int& roud_prec = 100, const bool& in_binary = false) const;
+    // void debugInfo() const; // для дебага
 
     // для pi
-    static DA_BIG calculatePi(const int& dec_prec, const int& bin_prec);
-    static std::string getPi(const int& dec_prec = 100, const int& bin_prec = 500);
+    static DA_BIG BellardFormula(const int& output_prec);
+    static std::string calculatePi(const int& output_prec);
 };
 
 }
 
 LongArithm::DA_BIG operator ""_longnum(long double);
 LongArithm::DA_BIG operator ""_longnum(unsigned long long);
+
+
 
 #endif
