@@ -1,17 +1,11 @@
-#include <iostream>
-#include <algorithm>
-#include <string>
-#include <vector>
-
-#include "funcsHeader.hpp"
+#include "longArithmetic.hpp"
 
 namespace LongArithm {
-using namespace std;
 
 // // КОНСТРУКТОРЫ И ДЕСТРУКТОРЫ
 // // ---------------------------------------------------------------------------------------------------- //
 
-DA_BIG::DA_BIG() { // дефолтный конструктор
+DA_BIG::DA_BIG() { // дефолтный конструкор
 
     point_pos_ = 0;
     precision_ = 100;
@@ -67,9 +61,6 @@ void DA_BIG::decToBin() { // из десятичной в двоичную си�
 
     digits_.clear();
     point_pos_ = 0;
-
-    // double_part.debugInfo();
-    // int_part.debugInfo();
 
     if (!double_part.digits_.empty()) {
         int dp_len = double_part.digits_.size();
@@ -137,17 +128,17 @@ DA_BIG DA_BIG::binToDec() const { // из двоичной в десятичну
     return result;
 }
 
-void DA_BIG::roundDouble(const int& leave_digits, const short& base) { // округление дробной части числа
+void DA_BIG::roundDouble(const int& roud_prec, const short& base) { // округление дробной части числа
 
-    precision_ = leave_digits;
+    precision_ = roud_prec;
 
-    if (leave_digits >= (int)digits_.size() - point_pos_) {
+    if (roud_prec >= (int)digits_.size() - point_pos_) {
         deleteZeroes();
         return;
     }
 
-    bool carry = (digits_[point_pos_ + leave_digits] >= base / 2);
-    digits_.erase(digits_.begin() + point_pos_ + leave_digits, digits_.end());  
+    bool carry = (digits_[point_pos_ + roud_prec] >= base / 2);
+    digits_.erase(digits_.begin() + point_pos_ + roud_prec, digits_.end());  
     for (int i = digits_.size() - 1; i >= 0 && carry != 0; --i) {
         digits_[i]++;
         carry = digits_[i] / base;
@@ -183,7 +174,8 @@ bool DA_BIG::isZero() const { // является ли число нулем?
 
 DA_BIG DA_BIG::operatorDivide(DA_BIG dividend, DA_BIG divisor, const short& base) const { // деление
 
-    // if (divisor.isZero()) return fatal error;
+    if (divisor.isZero()) throw std::overflow_error("Fatal error: division by zero!");
+    
     if (dividend.isZero()) return DA_BIG("0", 0, false);
 
     int float_diff = 
@@ -502,14 +494,14 @@ void DA_BIG::setBinPrecision(const int precision) { // изменить точн
     roundDouble(precision, 2);
 }
 
-std::string DA_BIG::toDecimalStr(const int& leave_digits, const bool& leave_in_bin) const { // перевод длинного числа в десятичную строку
+std::string DA_BIG::toDecimalStr(const int& roud_prec, const bool& in_binary) const { // перевод длинного числа в десятичную строку
 
     DA_BIG dec = *this;
-    if (!leave_in_bin) {
+    if (!in_binary) {
         dec = dec.binToDec();
-        dec.roundDouble(leave_digits, 10);
+        dec.roundDouble(roud_prec, 10);
     }
-    else dec.roundDouble(leave_digits, 2);
+    else dec.roundDouble(roud_prec, 2);
 
     std::string result;
     if (dec.minus_) result += '-';
@@ -521,36 +513,36 @@ std::string DA_BIG::toDecimalStr(const int& leave_digits, const bool& leave_in_b
     return result;
 }
 
-void DA_BIG::debugInfo() const { // для дебага
+// void DA_BIG::debugInfo() const { // для дебага
 
-    std::cout << std::endl << std::endl;
+//     std::cout << std::endl << std::endl;
 
-    std::cout << "Minus: " << (minus_ ? "yes" : "no")
-              << "\nPrecision: " << precision_
-              << "\nPoint position: " << point_pos_
-              << "\nDigits: " << digits_.size();
+//     std::cout << "Minus: " << (minus_ ? "yes" : "no")
+//               << "\nPrecision: " << precision_
+//               << "\nPoint position: " << point_pos_
+//               << "\nDigits: " << digits_.size();
               
-    std::cout << "\nNumber: ";
-    int i = 0;
-    for (auto it = digits_.begin(); it != digits_.end(); ++it) {
-        if (i++ == point_pos_) std::cout << '.';
-        std::cout << (int)(*it);
-    }
+//     std::cout << "\nNumber: ";
+//     int i = 0;
+//     for (auto it = digits_.begin(); it != digits_.end(); ++it) {
+//         if (i++ == point_pos_) std::cout << '.';
+//         std::cout << (int)(*it);
+//     }
 
-    std::cout << std::endl << std::endl;
-}
+//     std::cout << std::endl << std::endl;
+// }
 
 // // ---------------------------------------------------------------------------------------------------- //
 
 // // ПИ
 // // ---------------------------------------------------------------------------------------------------- //
 
-std::string DA_BIG::getPi(const int& dec_prec, const int& bin_prec) {
+std::string DA_BIG::calculatePi(const int& output_prec) {
 
-    DA_BIG Pi = DA_BIG::calculatePi(dec_prec, bin_prec);
+    DA_BIG Pi = DA_BIG::BellardFormula(output_prec);
     DA_BIG dec = Pi.binToDec();
-    if (dec_prec < (int)dec.digits_.size() - dec.point_pos_) 
-        dec.digits_.erase(dec.digits_.begin() + dec.point_pos_ + dec_prec, dec.digits_.end());  
+    if (output_prec < (int)dec.digits_.size() - dec.point_pos_) 
+        dec.digits_.erase(dec.digits_.begin() + dec.point_pos_ + output_prec, dec.digits_.end());  
 
     std::string result;
     for (int i = 0; i < dec.digits_.size(); i++) {
@@ -561,33 +553,34 @@ std::string DA_BIG::getPi(const int& dec_prec, const int& bin_prec) {
     return result;
 }
 
-DA_BIG DA_BIG::calculatePi(const int& dec_prec, const int& bin_prec) { // вычисляем знаки Пи с помощью Bellard's formula
+DA_BIG DA_BIG::BellardFormula(const int& output_prec) { // вычисляем знаки Пи с помощью Bellard's formula
     
-    DA_BIG pi{"0", bin_prec, false};
+    const int calculation_prec = output_prec * 4;
+    DA_BIG pi{"0", calculation_prec, false};
 
-    DA_BIG up{"1", bin_prec, false};
-    DA_BIG down = {"10000000000", bin_prec, false};
+    DA_BIG up{"1", calculation_prec, false};
+    DA_BIG down{"10000000000", calculation_prec, false};
 
-    DA_BIG up0{"100000", bin_prec, false};
-    DA_BIG up1{"1", bin_prec, false};
-    DA_BIG up2{"100000000", bin_prec, false};
-    DA_BIG up3{"1000000", bin_prec, false};
-    DA_BIG up4{"100", bin_prec, false};
-    DA_BIG up5{"100", bin_prec, false};
-    DA_BIG up6{"1", bin_prec, false};
+    DA_BIG up0{"100000", calculation_prec, false};
+    DA_BIG up1{"1", calculation_prec, false};
+    DA_BIG up2{"100000000", calculation_prec, false};
+    DA_BIG up3{"1000000", calculation_prec, false};
+    DA_BIG up4{"100", calculation_prec, false};
+    DA_BIG up5{"100", calculation_prec, false};
+    DA_BIG up6{"1", calculation_prec, false};
 
-    DA_BIG down0{"1", bin_prec, false};
-    DA_BIG down1{"11", bin_prec, false};
-    DA_BIG down2{"1", bin_prec, false};
-    DA_BIG down3{"11", bin_prec, false};
-    DA_BIG down4{"101", bin_prec, false};
-    DA_BIG down5{"111", bin_prec, false};
-    DA_BIG down6{"1001", bin_prec, false};
+    DA_BIG down0{"1", calculation_prec, false};
+    DA_BIG down1{"11", calculation_prec, false};
+    DA_BIG down2{"1", calculation_prec, false};
+    DA_BIG down3{"11", calculation_prec, false};
+    DA_BIG down4{"101", calculation_prec, false};
+    DA_BIG down5{"111", calculation_prec, false};
+    DA_BIG down6{"1001", calculation_prec, false};
 
-    if (dec_prec == 0) return DA_BIG{"11", 0, false};
+    if (output_prec == 0) return DA_BIG{"11", 0, false};
 
 
-    for (auto k = 0; k < dec_prec / 2; ++k) {
+    for (auto k = 0; k < output_prec / 2; ++k) {
 
         if (k % 2 == 0)
             pi += up*(-up0 / down0 - up1 / down1 + up2 / down2 - up3 / down3 - up4 / down4 - up5 / down5 + up6 / down6);
@@ -595,16 +588,16 @@ DA_BIG DA_BIG::calculatePi(const int& dec_prec, const int& bin_prec) { // выч
             pi -= up*(-up0 / down0 - up1 / down1 + up2 / down2 - up3 / down3 - up4 / down4 - up5 / down5 + up6 / down6);
             
         up /= down;
-        down0 += DA_BIG{"100", bin_prec, false};
-        down1 += DA_BIG{"100", bin_prec, false};
-        down2 += DA_BIG{"1010", bin_prec, false};
-        down3 += DA_BIG{"1010", bin_prec, false};
-        down4 += DA_BIG{"1010", bin_prec, false};
-        down5 += DA_BIG{"1010", bin_prec, false};
-        down6 += DA_BIG{"1010", bin_prec, false};
+        down0 += DA_BIG{"100", calculation_prec, false};
+        down1 += DA_BIG{"100", calculation_prec, false};
+        down2 += DA_BIG{"1010", calculation_prec, false};
+        down3 += DA_BIG{"1010", calculation_prec, false};
+        down4 += DA_BIG{"1010", calculation_prec, false};
+        down5 += DA_BIG{"1010", calculation_prec, false};
+        down6 += DA_BIG{"1010", calculation_prec, false};
     }
 
-    pi /= DA_BIG{"1000000", bin_prec, false};
+    pi /= DA_BIG{"1000000", calculation_prec, false};
 
     return pi;
 }
