@@ -17,5 +17,8 @@ test: executable
 pi: executable
 	./executable pi
 
+runmain: executable
+	./executable
+
 clean:
 	rm -f $(OBJ) executable
