@@ -25,11 +25,16 @@ private:
     bool isZero() const;
     void roundDouble(const int& roud_prec, const short& base);
 
+    // для pi
+    static DA_BIG BellardFormula(const int& output_prec);
+
     // основные методы рассчетов (операторы просто будут ссылаться на них в двоичной системе счисления)
     DA_BIG operatorDivide(DA_BIG, DA_BIG, const short& base) const;
     DA_BIG operatorAdd(DA_BIG, DA_BIG, const short& base) const;
     DA_BIG operatorSubtract(DA_BIG, DA_BIG, const short& base) const;
     DA_BIG operatorMultiply(DA_BIG, DA_BIG, const short& base) const;
+
+    
     
 public:
     
@@ -60,12 +65,10 @@ public:
     
     // другие методы
     void setBinPrecision(const int);
-    std::string toDecimalStr(const int& roud_prec = 100, const bool& in_binary = false) const;
+    std::string getAsString(const int& roud_prec = 100, const bool& in_binary = false) const;
+    static std::string calculatePi(const int& output_prec); // для pi
+    
     // void debugInfo() const; // для дебага
-
-    // для pi
-    static DA_BIG BellardFormula(const int& output_prec);
-    static std::string calculatePi(const int& output_prec);
 };
 
 }
