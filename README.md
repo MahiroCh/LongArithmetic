@@ -42,5 +42,60 @@ std::cout << a;
 2.25
 ```
 
+> [!IMPORTANT]
+> Функционал вычислений случайных выражений из командной строки не задан, поэтому придется открывать main.cpp, вручную добавлять туда необходимый код и запускать.
+
+# Как работать с main.cpp для проверки программы
+
+При открытии `main.cpp` вас будет ждать такая картина:
+```
+#include "longArithmetic.hpp"
+#include "tests.hpp"
+
+int main(int argc, char* argv[]) {
+    
+    if (argc > 1) {
+        if ((std::string)argv[1] == "test") {
+            LongArithmTests::mainTest();
+        }
+        
+        if ((std::string)argv[1] == "pi") {
+            int pi_prec = 100;
+            if (argc > 2) pi_prec = atoi(argv[2]);
+            LongArithmTests::piTest(pi_prec);
+        }
+    }
+}
+```
+
+Можно просто добавлять свой код перед телом `main`, после чего запускать это из терминала с помощью: "make runmain".
+
+Пример изменненного кода:
+```
+#include "longArithmetic.hpp"
+#include "tests.hpp"
+
+int main(int argc, char* argv[]) {
+
+    LongArithm::DA_BIG a("2.345");
+    std::cout << a << "\n";
+    a.setBinPrecision(2);
+    std::cout << a;
+
+    if (argc > 1) {
+        if ((std::string)argv[1] == "test") {
+            LongArithmTests::mainTest();
+        }
+        
+        if ((std::string)argv[1] == "pi") {
+            int pi_prec = 100;
+            if (argc > 2) pi_prec = atoi(argv[2]);
+            LongArithmTests::piTest(pi_prec);
+        }
+    }
+}
+```
+
+
 
 Made by Георгий БПИ241
