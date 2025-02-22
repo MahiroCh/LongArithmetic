@@ -15,10 +15,13 @@ test: executable
 	./executable test
 
 pi: executable
-	./executable pi
+	./executable pi $(filter-out $@, $(MAKECMDGOALS))
 
 runmain: executable
 	./executable
+
+%:
+	@:
 
 clean:
 	rm -f $(OBJ) executable
