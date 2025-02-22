@@ -8,7 +8,7 @@ namespace LongArithm {
 DA_BIG::DA_BIG() { // дефолтный конструкор
 
     point_pos_ = 0;
-    precision_ = 100;
+    precision_ = 700;
     minus_ = false;
 }
 
@@ -175,7 +175,6 @@ bool DA_BIG::isZero() const { // является ли число нулем?
 DA_BIG DA_BIG::operatorDivide(DA_BIG dividend, DA_BIG divisor, const short& base) const { // деление
 
     if (divisor.isZero()) throw std::overflow_error("Fatal error: division by zero!");
-    
     if (dividend.isZero()) return DA_BIG("0", 0, false);
 
     int float_diff = 
@@ -469,20 +468,20 @@ DA_BIG& DA_BIG::operator=(const DA_BIG& other) { // оператор присв�
     return *this; 
 }
 
-// std::ostream& operator<<(std::ostream& os, const DA_BIG& res) { // оператор вывода
+std::ostream& operator<<(std::ostream& os, const DA_BIG& res) { // оператор вывода
 
-//     DA_BIG dec = res.binToDec();
+    DA_BIG dec = res.binToDec();
 
-//     dec.roundDouble(50, 10);
+    dec.roundDouble(50, 10);
 
-//     std::string result;
-//     if (dec.minus_) result += '-';
-//     for (int i = 0; i < dec.digits_.size(); i++) {
-//         if (i == dec.point_pos_) result += '.';
-//         result += dec.digits_[i] + '0';
-//     }
-//     return os << result;
-// }
+    std::string result;
+    if (dec.minus_) result += '-';
+    for (int i = 0; i < dec.digits_.size(); i++) {
+        if (i == dec.point_pos_) result += '.';
+        result += dec.digits_[i] + '0';
+    }
+    return os << result;
+}
 
 // // ---------------------------------------------------------------------------------------------------- //
 
@@ -494,7 +493,7 @@ void DA_BIG::setBinPrecision(const int precision) { // изменить точн
     roundDouble(precision, 2);
 }
 
-std::string DA_BIG::toDecimalStr(const int& roud_prec, const bool& in_binary) const { // перевод длинного числа в десятичную строку
+std::string DA_BIG::getAsString(const int& roud_prec, const bool& in_binary) const { // перевод длинного числа в десятичную строку
 
     DA_BIG dec = *this;
     if (!in_binary) {
